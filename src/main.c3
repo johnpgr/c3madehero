@@ -11,7 +11,7 @@ void* bitmap_memory;
 int bitmap_width;
 int bitmap_height;
 
-fn void renderWeirdGradient(int x_offset, int y_offset) {
+fn void render_weird_gradient(int x_offset, int y_offset) {
     int width = bitmap_width;
     int height = bitmap_height;
 	int pitch = width * BYTES_PER_PIXEL;
@@ -28,9 +28,9 @@ fn void renderWeirdGradient(int x_offset, int y_offset) {
     }
 }
 
-fn void resizeDIBSection(int width, int height) {
+fn void resize_dib_section(int width, int height) {
     if (bitmap_memory) {
-        win32::virtualFree(bitmap_memory, 0, VirtualFreeType.MEM_RELEASE);
+        win32::virtual_free(bitmap_memory, 0, VirtualFreeType.MEM_RELEASE);
     }
 
     bitmap_width = width;
@@ -44,31 +44,33 @@ fn void resizeDIBSection(int width, int height) {
 	bitmap_info.bmiHeader.biCompression = (uint)BiCompression.BI_RGB;
 
     int bitmap_memory_size = bitmap_width * bitmap_height * BYTES_PER_PIXEL;
-    bitmap_memory = win32::virtualAlloc(
+    bitmap_memory = win32::virtual_alloc(
         null,
         (uptr)bitmap_memory_size,
-        VirtualAllocationType.MEM_COMMIT,
+        VirtualAllocationType.MEM_RESERVE | VirtualAllocationType.MEM_COMMIT,
         PageProtectionFlags.PAGE_READWRITE,
     );
 }
 
-fn void updateWindow(Hdc device_context, Rect* client_rect, int x, int y, int width, int height) {
+fn void update_window(Hdc device_context, Rect* client_rect, int x, int y, int width, int height) {
+    if (!bitmap_memory) return;
+
     int window_width = client_rect.right - client_rect.left;
     int window_height = client_rect.bottom - client_rect.top;
 
-    win32::stretchDIBits(
+    win32::stretch_di_bits(
         device_context,
         // x, y, width, height,
         // x, y, width, height,
+        x, y, width, height,
         0, 0, bitmap_width, bitmap_height,
-        0, 0, window_width, window_height,
         bitmap_memory, &bitmap_info,
         DibUsage.DIB_RGB_COLORS,
         RopCode.SRCCOPY,
     );
 }
 
-fn LResult mainWindowCallback(
+fn LResult main_window_callback(
     HWnd window,
     uint message,
     WParam w_param,
@@ -79,16 +81,16 @@ fn LResult mainWindowCallback(
     switch (message) {
         case win32::WM_SIZE: {
             Rect client_rect;
-            win32::getClientRect(window, &client_rect);
+            win32::get_client_rect(window, &client_rect);
             int width = client_rect.right - client_rect.left;
             int height = client_rect.bottom - client_rect.top;
-            resizeDIBSection(width, height);
+            resize_dib_section(width, height);
         } break;
         case win32::WM_CLOSE: case win32::WM_DESTROY: {
             running = false;
         } break;
         case win32::WM_ACTIVATEAPP: {
-            win32::outputDebugStringA("WM_ACTIVATEAPP\n");
+            win32::output_debug_string("WM_ACTIVATEAPP\n");
         } break;
         case win32::WM_ERASEBKGND: {
             result = 1;
@@ -96,34 +98,33 @@ fn LResult mainWindowCallback(
         case win32::WM_PAINT: {
             PaintStruct paint;
 
-            Hdc hdc = win32::beginPaint(window, &paint);
-            defer win32::endPaint(window, &paint);
+            Hdc hdc = win32::begin_paint(window, &paint);
+            defer win32::end_paint(window, &paint);
         } break;
         default: {
-            result = win32::defWindowProcA(window, message, w_param, l_param);
+            result = win32::def_window_proc(window, message, w_param, l_param);
         } 
     }
 
     return result;
 }
 
-
 fn int main() @winmain {
-    HInstance h_instance = win32::getModuleHandleA(null);
+    HInstance h_instance = win32::get_module_handle(null);
 
     WndClassA window_class = {
         .style = WndClassStyles.CS_OWNDC | WndClassStyles.CS_HREDRAW | WndClassStyles.CS_VREDRAW,
-        .lpfnWndProc = &mainWindowCallback,
+        .lpfnWndProc = &main_window_callback,
         .hInstance = h_instance,
         .lpszClassName = "C3MadeHeroWindowClass",
     };
 
-    if (win32::registerClassA(&window_class) == 0) {
-        win32::outputDebugStringA("Failed to register window_class");
+    if (win32::register_class(&window_class) == 0) {
+        win32::output_debug_string("Failed to register window_class");
         return -1;
     };
 
-    HWnd window = win32::createWindowExA(
+    HWnd window = win32::create_window_ex(
         (WindowExStyle)0,
         window_class.lpszClassName,
         "C3Made Hero",
@@ -148,23 +149,23 @@ fn int main() @winmain {
 
     while (running) {
         Msg message;
-        while (win32::peekMessageA(&message, null, 0, 0, PeekMessageRemoveType.PM_REMOVE)) {
+        while (win32::peek_message(&message, null, 0, 0, PeekMessageRemoveType.PM_REMOVE)) {
             if (message.message == win32::WM_QUIT) {
                 running = false;
             }
-            win32::translateMessage(&message);
-            win32::dispatchMessageA(&message);
+            win32::translate_message(&message);
+            win32::dispatch_message(&message);
         }
 
-        renderWeirdGradient(x_offset++, y_offset);
+        render_weird_gradient(x_offset++, y_offset);
 
-        Hdc device_context = win32::getDC(window);
+        Hdc device_context = win32::get_dc(window);
         Rect client_rect;
-        win32::getClientRect(window, &client_rect);
+        win32::get_client_rect(window, &client_rect);
         int window_width = client_rect.right - client_rect.left;
         int window_height = client_rect.bottom - client_rect.top;
-        updateWindow(device_context, &client_rect, 0, 0, window_width, window_height);
-        win32::releaseDC(window, device_context);
+        update_window(device_context, &client_rect, 0, 0, window_width, window_height);
+        win32::release_dc(window, device_context);
     }
 
     return 0;
