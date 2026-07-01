@@ -1,0 +1,14 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"type": "lldb",
+			"request": "launch",
+			"name": "Debug C3 Program",
+			"program": "c:\\Users\\Joao\\dev\\c3madehero\\build\\c3madehero.exe",
+			"args": [],
+			"cwd": "${workspaceFolder}",
+			"stopOnEntry": false
+		}
+	]
+}

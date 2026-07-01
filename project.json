@@ -1,9 +1,11 @@
 {
     "version": "0.1.0",
     "sources": ["src/", "lib/"],
+    "output": "build/",
     "targets": {
         "c3madehero": {
             "type": "executable"
         }
-    }
+    },
+    "debug-info": "full",
 }
