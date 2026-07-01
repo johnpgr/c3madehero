@@ -1,0 +1,8 @@
+// raddbg 0.9.27 project file
+
+target:
+{
+  executable: "out/c3madehero.exe"
+  working_directory: "out/"
+  enabled: 1
+}

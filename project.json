@@ -1,0 +1,9 @@
+{
+    "version": "0.1.0",
+    "sources": ["src/", "lib/"],
+    "targets": {
+        "c3madehero": {
+            "type": "executable"
+        }
+    }
+}
