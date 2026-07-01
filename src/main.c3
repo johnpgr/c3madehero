@@ -2,40 +2,66 @@ module main;
 
 import win32;
 
+const int BYTES_PER_PIXEL = 4;
+
 bool running = true;
-void* bitmap_memory;
+
 BitmapInfo bitmap_info;
-HBitmap bitmap_handle;
-Hdc device_context;
+void* bitmap_memory;
+int bitmap_width;
+int bitmap_height;
+
+fn void renderWeirdGradient(int x_offset, int y_offset) {
+    int width = bitmap_width;
+    int height = bitmap_height;
+	int pitch = width * BYTES_PER_PIXEL;
+    char* row = (char*)bitmap_memory;
+
+    for (int y = 0; y < bitmap_height; y++) {
+        uint* pixel = (uint*)row;
+        for (int x = 0; x < bitmap_width; x++) {
+            char blue = (char)(x + x_offset);
+            char green = (char)(y + y_offset);
+            *pixel++ = ((green << 8) | blue);
+        }
+        row += pitch;
+    }
+}
 
 fn void resizeDIBSection(int width, int height) {
-	if (bitmap_handle) {
-		win32::deleteObject(bitmap_handle);
-	} 
-	if (!device_context) {
-		device_context = win32::createCompatibleDC(null);
-	}
+    if (bitmap_memory) {
+        win32::virtualFree(bitmap_memory, 0, VirtualFreeType.MEM_RELEASE);
+    }
+
+    bitmap_width = width;
+    bitmap_height = height;
 
     bitmap_info.bmiHeader.biSize = BitmapInfoHeader::size;
-	bitmap_info.bmiHeader.biWidth = width;
-	bitmap_info.bmiHeader.biHeight = height;
+	bitmap_info.bmiHeader.biWidth = bitmap_width;
+	bitmap_info.bmiHeader.biHeight = -bitmap_height;
 	bitmap_info.bmiHeader.biPlanes = 1;
 	bitmap_info.bmiHeader.biBitCount = 32;
 	bitmap_info.bmiHeader.biCompression = (uint)BiCompression.BI_RGB;
 
-    bitmap_handle = win32::createDIBSection(
-        device_context, &bitmap_info,
-        DibUsage.DIB_RGB_COLORS,
-        &bitmap_memory,
-        null, 0,
+    int bitmap_memory_size = bitmap_width * bitmap_height * BYTES_PER_PIXEL;
+    bitmap_memory = win32::virtualAlloc(
+        null,
+        (uptr)bitmap_memory_size,
+        VirtualAllocationType.MEM_COMMIT,
+        PageProtectionFlags.PAGE_READWRITE,
     );
 }
 
-fn void updateWindow(int x, int y, int width, int height) {
+fn void updateWindow(Hdc device_context, Rect* client_rect, int x, int y, int width, int height) {
+    int window_width = client_rect.right - client_rect.left;
+    int window_height = client_rect.bottom - client_rect.top;
+
     win32::stretchDIBits(
         device_context,
-        x, y, width, height,
-        x, y, width, height,
+        // x, y, width, height,
+        // x, y, width, height,
+        0, 0, bitmap_width, bitmap_height,
+        0, 0, window_width, window_height,
         bitmap_memory, &bitmap_info,
         DibUsage.DIB_RGB_COLORS,
         RopCode.SRCCOPY,
@@ -50,7 +76,7 @@ fn LResult mainWindowCallback(
 ) {
     LResult result = 0;
 
-    switch(message) {
+    switch (message) {
         case win32::WM_SIZE: {
             Rect client_rect;
             win32::getClientRect(window, &client_rect);
@@ -69,17 +95,9 @@ fn LResult mainWindowCallback(
         } break; 
         case win32::WM_PAINT: {
             PaintStruct paint;
+
             Hdc hdc = win32::beginPaint(window, &paint);
             defer win32::endPaint(window, &paint);
-            int width = paint.rcPaint.right - paint.rcPaint.left;
-            int height = paint.rcPaint.bottom - paint.rcPaint.top;
-            static RopCode rop = RopCode.WHITENESS;
-            win32::patBlt(hdc, paint.rcPaint.left, paint.rcPaint.top, width, height, rop);
-            if (rop == RopCode.WHITENESS) {
-                rop = RopCode.BLACKNESS;
-            } else {
-                rop = RopCode.WHITENESS;
-            }
         } break;
         default: {
             result = win32::defWindowProcA(window, message, w_param, l_param);
@@ -105,7 +123,7 @@ fn int main() @winmain {
         return -1;
     };
 
-    win32::createWindowExA(
+    HWnd window = win32::createWindowExA(
         (WindowExStyle)0,
         window_class.lpszClassName,
         "C3Made Hero",
@@ -120,16 +138,33 @@ fn int main() @winmain {
         null,
     );
 
+    if (!window) {
+        // TODO: logging
+        return -1;
+    }
 
-    Msg message;
+    int x_offset = 0;
+    int y_offset = 0;
+
     while (running) {
-        Bool message_result = win32::getMessageA(&message, null, 0, 0);
-        if (message_result < 0) {
-            continue;
+        Msg message;
+        while (win32::peekMessageA(&message, null, 0, 0, PeekMessageRemoveType.PM_REMOVE)) {
+            if (message.message == win32::WM_QUIT) {
+                running = false;
+            }
+            win32::translateMessage(&message);
+            win32::dispatchMessageA(&message);
         }
 
-        win32::translateMessage(&message);
-        win32::dispatchMessageA(&message);
+        renderWeirdGradient(x_offset++, y_offset);
+
+        Hdc device_context = win32::getDC(window);
+        Rect client_rect;
+        win32::getClientRect(window, &client_rect);
+        int window_width = client_rect.right - client_rect.left;
+        int window_height = client_rect.bottom - client_rect.top;
+        updateWindow(device_context, &client_rect, 0, 0, window_width, window_height);
+        win32::releaseDC(window, device_context);
     }
 
     return 0;

@@ -7,5 +7,5 @@
             "type": "executable"
         }
     },
-    "debug-info": "full",
+    "debug-info": "full"
 }
