@@ -10,39 +10,16 @@ struct Guid
     char[8] data4;
 }
 
-// Win32 original: _Bits_e__Struct
-struct BitsEStruct
-{
-    uint _bitfield;
-}
-
-// Win32 original: _Bytes_e__Struct
-struct BytesEStruct
-{
-    char baseMid;
-    char flags1;
-    char flags2;
-    char baseHi;
-}
-
 // Win32 original: _Flags_e__Struct
 struct FlagsEStruct
 {
     char _bitfield;
 }
 
-// Win32 original: _HighWord_e__Union
-struct HighWordEUnion
+// Win32 original: _OtherCpuInfo_e__Struct
+struct OtherCpuInfoEStruct
 {
-    BytesEStruct bytes;
-    BitsEStruct bits;
-}
-
-// Win32 original: _Misc_e__Union
-struct MiscEUnion
-{
-    uint physicalAddress;
-    uint virtualSize;
+    ulong[2] processorFeatures;
 }
 
 // Win32 original: _S_un_b_e__Struct
@@ -69,10 +46,12 @@ struct SUnWEStruct
     ushort s_w2;
 }
 
-// Win32 original: _u_e__Union
-struct UEUnion
+// Win32 original: _X86CpuInfo_e__Struct
+struct X86CpuInfoEStruct
 {
-    char[16] byte;
-    ushort[8] word;
+    uint[3] vendorId;
+    uint versionInformation;
+    uint featureInformation;
+    uint aMDExtendedCpuFeatures;
 }
 

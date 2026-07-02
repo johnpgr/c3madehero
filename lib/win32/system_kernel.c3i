@@ -4,18 +4,6 @@ module win32;
 
 // Win32 namespace: Windows.Win32.System.Kernel
 
-// Win32 original: EXCEPTION_DISPOSITION
-constdef ExceptionDisposition : int
-{
-    EXCEPTIONCONTINUEEXECUTION = 0,
-    EXCEPTIONCONTINUESEARCH = 1,
-    EXCEPTIONNESTEDEXCEPTION = 2,
-    EXCEPTIONCOLLIDEDUNWIND = 3
-}
-
-// Win32 original: EXCEPTION_ROUTINE
-alias ExceptionRoutine = fn ExceptionDisposition(ExceptionRecord* exceptionRecord, void* establisherFrame, Context* contextRecord, void* dispatcherContext);
-
 // Win32 original: FLOATING_SAVE_AREA
 struct FloatingSaveArea
 {

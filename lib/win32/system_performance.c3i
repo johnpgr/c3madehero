@@ -1,0 +1,18 @@
+module win32;
+
+// Generated from Windows.Win32.winmd. Original Win32 names are preserved with @cname/comments.
+
+// Win32 namespace: Windows.Win32.System.Performance
+
+<*
+ @param [&out] lpPerformanceCount
+*>
+extern fn Bool query_performance_counter(long* lpPerformanceCount)
+    @cname("QueryPerformanceCounter") @link("kernel32");
+
+<*
+ @param [&out] lpFrequency
+*>
+extern fn Bool query_performance_frequency(long* lpFrequency)
+    @cname("QueryPerformanceFrequency") @link("kernel32");
+

@@ -1,0 +1,56 @@
+module win32;
+
+// Generated from Windows.Win32.winmd. Original Win32 names are preserved with @cname/comments.
+
+// Win32 namespace: Windows.Win32.Storage.FileSystem
+
+// Win32 original: VS_FIXEDFILEINFO
+struct VsFixedfileinfo
+{
+    uint dwSignature;
+    uint dwStrucVersion;
+    uint dwFileVersionMS;
+    uint dwFileVersionLS;
+    uint dwProductVersionMS;
+    uint dwProductVersionLS;
+    uint dwFileFlagsMask;
+    VsFixedfileinfoFileFlags dwFileFlags;
+    VsFixedfileinfoFileOs dwFileOS;
+    uint dwFileType;
+    uint dwFileSubtype;
+    uint dwFileDateMS;
+    uint dwFileDateLS;
+}
+
+// Win32 original: VS_FIXEDFILEINFO_FILE_FLAGS
+constdef VsFixedfileinfoFileFlags : uint
+{
+    VS_FF_DEBUG = 1,
+    VS_FF_PRERELEASE = 2,
+    VS_FF_PATCHED = 4,
+    VS_FF_PRIVATEBUILD = 8,
+    VS_FF_INFOINFERRED = 16,
+    VS_FF_SPECIALBUILD = 32
+}
+
+// Win32 original: VS_FIXEDFILEINFO_FILE_OS
+constdef VsFixedfileinfoFileOs : uint
+{
+    VOS_UNKNOWN = 0,
+    VOS_DOS = 65536,
+    VOS_OS216 = 131072,
+    VOS_OS232 = 196608,
+    VOS_NT = 262144,
+    VOS_WINCE = 327680,
+    VOS__BASE = 0,
+    VOS__WINDOWS16 = 1,
+    VOS__PM16 = 2,
+    VOS__PM32 = 3,
+    VOS__WINDOWS32 = 4,
+    VOS_DOS_WINDOWS16 = 65537,
+    VOS_DOS_WINDOWS32 = 65540,
+    VOS_OS216_PM16 = 131074,
+    VOS_OS232_PM32 = 196611,
+    VOS_NT_WINDOWS32 = 262148
+}
+
