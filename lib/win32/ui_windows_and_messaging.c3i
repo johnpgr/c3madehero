@@ -328,6 +328,9 @@ constdef SystemMetricsIndex : int
     SM_YVIRTUALSCREEN = 77
 }
 
+// Win32 original: TIMERPROC
+alias TimerProc = fn void(HWnd param0, uint param1, uptr param2, uint param3);
+
 // Win32 original: WINDOW_EX_STYLE
 constdef WindowExStyle : uint
 {
@@ -1482,6 +1485,9 @@ extern fn Bool get_messageA(Msg* lpMsg, HWnd hWnd, uint wMsgFilterMin, uint wMsg
 extern fn Bool get_messageW(Msg* lpMsg, HWnd hWnd, uint wMsgFilterMin, uint wMsgFilterMax)
     @cname("GetMessageW") @link("user32");
 
+extern fn Bool kill_timer(HWnd hWnd, uptr uIDEvent)
+    @cname("KillTimer") @link("user32");
+
 extern fn HCursor load_cursorA(HInstance hInstance, char* lpCursorName)
     @cname("LoadCursorA") @link("user32");
 
@@ -1538,6 +1544,9 @@ extern fn ushort register_class_exW(WndClassExW* param0)
 *>
 extern fn ushort register_classW(WndClassW* lpWndClass)
     @cname("RegisterClassW") @link("user32");
+
+extern fn uptr set_timer(HWnd hWnd, uptr nIDEvent, uint uElapse, TimerProc lpTimerFunc)
+    @cname("SetTimer") @link("user32");
 
 extern fn Bool set_window_textA(HWnd hWnd, char* lpString)
     @cname("SetWindowTextA") @link("user32");

@@ -1,12 +1,15 @@
 module main;
 
+import std::atomic;
 import win32;
 
 const int BYTES_PER_PIXEL = 4;
+const double FIXED_DT = 1.0 / 60.0;
+const int MAX_UPDATES_PER_FRAME = 8;
 
-bool running = true;
-
+Atomic{bool} running;
 HWnd window;
+Handle render_thread;
 Hdc device;
 BitmapInfo bitmap_info;
 HBitmap hbitmap;
@@ -14,6 +17,12 @@ HBitmap prev_hbitmap;
 void* bitmap_memory;
 int bitmap_width;
 int bitmap_height;
+
+int x_offset;
+int y_offset;
+long perf_freq;
+long last_counter;
+double accumulator;
 
 fn void render_weird_gradient(int x_offset, int y_offset) {
     int width = bitmap_width;
@@ -32,19 +41,28 @@ fn void render_weird_gradient(int x_offset, int y_offset) {
     }
 }
 
-fn void resize_dib_section(int width, int height) {
+fn void free_dib_section() {
     if (device) {
         win32::select_object(device, prev_hbitmap);
         win32::delete_dc(device);
         device = null;
+        prev_hbitmap = null;
     }
     if (hbitmap) {
         win32::delete_object(hbitmap);
         hbitmap = null;
     }
 
+    bitmap_memory = null;
+}
+
+fn void resize_dib_section(int width, int height) {
+    free_dib_section();
+
     bitmap_width = width;
     bitmap_height = height;
+
+    if (width <= 0 || height <= 0) return;
 
     bitmap_info.bmiHeader.biSize = BitmapInfoHeader::size;
 	bitmap_info.bmiHeader.biWidth = bitmap_width;
@@ -85,6 +103,84 @@ fn void update_window(Hdc window_device, Rect* client_rect, int x, int y, int wi
     );
 }
 
+fn void reset_frame_timer() {
+    win32::query_performance_counter(&last_counter);
+    accumulator = 0.0;
+}
+
+fn void process_game_frame(HWnd target_window) {
+    Rect client_rect;
+    win32::get_client_rect(target_window, &client_rect);
+    int window_width = client_rect.right - client_rect.left;
+    int window_height = client_rect.bottom - client_rect.top;
+
+    if (window_width != bitmap_width || window_height != bitmap_height) {
+        resize_dib_section(window_width, window_height);
+    }
+
+    long now = 0;
+    win32::query_performance_counter(&now);
+
+    double delta_seconds = (double)(now - last_counter) / (double)perf_freq;
+    last_counter = now;
+
+    if (delta_seconds > 0.25) delta_seconds = 0.25;
+
+    accumulator += delta_seconds;
+
+    int updates_this_frame = 0;
+    while (accumulator >= FIXED_DT && updates_this_frame < MAX_UPDATES_PER_FRAME) {
+        x_offset += 1;
+        accumulator -= FIXED_DT;
+        updates_this_frame += 1;
+    }
+
+    if (updates_this_frame == MAX_UPDATES_PER_FRAME) {
+        accumulator = 0.0;
+    }
+
+    if (bitmap_memory) {
+        render_weird_gradient(x_offset, y_offset);
+    }
+
+    Hdc window_device = win32::get_dc(target_window);
+    if (window_device) {
+        update_window(window_device, &client_rect, 0, 0, window_width, window_height);
+        win32::release_dc(target_window, window_device);
+    }
+}
+
+fn uint render_thread_proc(void* parameter) {
+    HWnd target_window = (HWnd)parameter;
+
+    win32::query_performance_frequency(&perf_freq);
+    reset_frame_timer();
+
+    while (running.load()) {
+        process_game_frame(target_window);
+        win32::sleep(1);
+    }
+
+    return 0;
+}
+
+fn void shutdown() {
+    running.store(false);
+
+    if (render_thread) {
+        win32::wait_for_single_object(render_thread, win32::INFINITE);
+        win32::close_handle(render_thread);
+        render_thread = null;
+    }
+
+    free_dib_section();
+
+    if (window) {
+        win32::destroy_window(window);
+        window = null;
+    }
+}
+
 fn LResult main_window_callback(
     HWnd window,
     uint message,
@@ -94,28 +190,9 @@ fn LResult main_window_callback(
     LResult result = 0;
 
     switch (message) {
-        case win32::WM_SIZE: {
-            Rect client_rect;
-            win32::get_client_rect(window, &client_rect);
-            int width = client_rect.right - client_rect.left;
-            int height = client_rect.bottom - client_rect.top;
-            resize_dib_section(width, height);
-        } break;
         case win32::WM_CLOSE: case win32::WM_DESTROY: {
-            running = false;
+            running.store(false);
         } break;
-        case win32::WM_ACTIVATEAPP: {
-            win32::output_debug_string("WM_ACTIVATEAPP\n");
-        } break;
-        case win32::WM_ERASEBKGND: {
-            result = 1;
-        } break; 
-        // case win32::WM_PAINT: {
-        //     PaintStruct paint;
-
-        //     Hdc hdc = win32::begin_paint(window, &paint);
-        //     defer win32::end_paint(window, &paint);
-        // } break;
         default: {
             result = win32::def_window_proc(window, message, w_param, l_param);
         } 
@@ -125,6 +202,8 @@ fn LResult main_window_callback(
 }
 
 fn int main() @winmain {
+    defer shutdown();
+
     HInstance h_instance = win32::get_module_handle(null);
 
     WndClassA window_class = {
@@ -139,85 +218,50 @@ fn int main() @winmain {
         return -1;
     };
 
-    HWnd window = win32::create_window_ex(
+    window = win32::create_window_ex(
         (WindowExStyle)0,
         window_class.lpszClassName,
         "C3Made Hero",
         WindowStyle.WS_OVERLAPPEDWINDOW | WindowStyle.WS_VISIBLE,
-        win32::CW_USEDEFAULT,
-        win32::CW_USEDEFAULT,
-        win32::CW_USEDEFAULT,
-        win32::CW_USEDEFAULT,
-        null,
-        null,
+        win32::CW_USEDEFAULT, win32::CW_USEDEFAULT,
+        win32::CW_USEDEFAULT, win32::CW_USEDEFAULT,
+        null, null,
         h_instance,
         null,
     );
 
     if (!window) {
-        // TODO: logging
         return -1;
     }
 
-    int x_offset = 0;
-    int y_offset = 0;
+    running.store(true);
 
-    // minimal fixed-step timing
-    long perf_freq = 0;
-    long last_counter = 0;
-    double accumulator = 0.0;
-    double fixed_dt = 1.0 / 60.0;
+    uint render_thread_id = 0;
+    render_thread = win32::create_thread(
+        null,
+        0,
+        &render_thread_proc,
+        window,
+        ThreadCreationFlags.THREAD_CREATE_RUN_IMMEDIATELY,
+        &render_thread_id,
+    );
 
-    win32::query_performance_frequency(&perf_freq);
-    win32::query_performance_counter(&last_counter);
+    if (!render_thread) {
+        return -1;
+    }
 
-    while (running) {
+    while (running.load()) {
         Msg message;
         while (win32::peek_message(&message, null, 0, 0, PeekMessageRemoveType.PM_REMOVE)) {
             if (message.message == win32::WM_QUIT) {
-                running = false;
+                running.store(false);
             }
             win32::translate_message(&message);
             win32::dispatch_message(&message);
         }
 
-		if (bitmap_memory) {
-            long now = 0;
-            win32::query_performance_counter(&now);
-            double delta_seconds = (double)(now - last_counter) / (double)perf_freq;
-            last_counter = now;
-
-            accumulator += delta_seconds;
-            if (accumulator > 0.25) accumulator = 0.25;
-
-            while (accumulator >= fixed_dt) {
-                x_offset += 1;
-                accumulator -= fixed_dt;
-            }
-
-            render_weird_gradient(x_offset, y_offset);
-        }
-
-        Hdc window_device = win32::get_dc(window);
-        Rect client_rect; win32::get_client_rect(window, &client_rect);
-        int window_width = client_rect.right - client_rect.left;
-        int window_height = client_rect.bottom - client_rect.top;
-
-        update_window(window_device, &client_rect, 0, 0, window_width, window_height);
-        win32::release_dc(window, window_device);
         win32::sleep(1);
     }
-
-    if (device) {
-        win32::select_object(device, prev_hbitmap);
-        win32::delete_dc(device);
-        device = null;
-    }
-    if (hbitmap) {
-        win32::delete_object(hbitmap);
-        hbitmap = null;
-    }
-    bitmap_memory = null;
 
     return 0;
 }
