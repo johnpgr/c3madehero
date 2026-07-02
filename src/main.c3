@@ -6,7 +6,11 @@ const int BYTES_PER_PIXEL = 4;
 
 bool running = true;
 
+HWnd window;
+Hdc device;
 BitmapInfo bitmap_info;
+HBitmap hbitmap;
+HBitmap prev_hbitmap;
 void* bitmap_memory;
 int bitmap_width;
 int bitmap_height;
@@ -29,8 +33,14 @@ fn void render_weird_gradient(int x_offset, int y_offset) {
 }
 
 fn void resize_dib_section(int width, int height) {
-    if (bitmap_memory) {
-        win32::virtual_free(bitmap_memory, 0, VirtualFreeType.MEM_RELEASE);
+    if (device) {
+        win32::select_object(device, prev_hbitmap);
+        win32::delete_dc(device);
+        device = null;
+    }
+    if (hbitmap) {
+        win32::delete_object(hbitmap);
+        hbitmap = null;
     }
 
     bitmap_width = width;
@@ -43,29 +53,34 @@ fn void resize_dib_section(int width, int height) {
 	bitmap_info.bmiHeader.biBitCount = 32;
 	bitmap_info.bmiHeader.biCompression = (uint)BiCompression.BI_RGB;
 
-    int bitmap_memory_size = bitmap_width * bitmap_height * BYTES_PER_PIXEL;
-    bitmap_memory = win32::virtual_alloc(
-        null,
-        (uptr)bitmap_memory_size,
-        VirtualAllocationType.MEM_RESERVE | VirtualAllocationType.MEM_COMMIT,
-        PageProtectionFlags.PAGE_READWRITE,
+	device = win32::create_compatible_dc(null);
+    hbitmap = win32::create_dib_section(
+        device, &bitmap_info,
+        DibUsage.DIB_RGB_COLORS,
+        &bitmap_memory,
+        null, 0,
     );
+    prev_hbitmap = win32::select_object(device, hbitmap);
 }
 
-fn void update_window(Hdc device_context, Rect* client_rect, int x, int y, int width, int height) {
-    if (!bitmap_memory) return;
+fn void update_window(Hdc window_device, Rect* client_rect, int x, int y, int width, int height) {
+    if (!bitmap_memory || !device) return;
 
-    int window_width = client_rect.right - client_rect.left;
-    int window_height = client_rect.bottom - client_rect.top;
+    if (width == bitmap_width && height == bitmap_height) {
+        win32::bit_blt(
+            window_device,
+            x, y, width, height,
+            device, 0, 0,
+            RopCode.SRCCOPY,
+        );
+        return;
+    }
 
-    win32::stretch_di_bits(
-        device_context,
-        // x, y, width, height,
-        // x, y, width, height,
+    win32::stretch_blt(
+        window_device,
         x, y, width, height,
+        device,
         0, 0, bitmap_width, bitmap_height,
-        bitmap_memory, &bitmap_info,
-        DibUsage.DIB_RGB_COLORS,
         RopCode.SRCCOPY,
     );
 }
@@ -95,12 +110,12 @@ fn LResult main_window_callback(
         case win32::WM_ERASEBKGND: {
             result = 1;
         } break; 
-        case win32::WM_PAINT: {
-            PaintStruct paint;
+        // case win32::WM_PAINT: {
+        //     PaintStruct paint;
 
-            Hdc hdc = win32::begin_paint(window, &paint);
-            defer win32::end_paint(window, &paint);
-        } break;
+        //     Hdc hdc = win32::begin_paint(window, &paint);
+        //     defer win32::end_paint(window, &paint);
+        // } break;
         default: {
             result = win32::def_window_proc(window, message, w_param, l_param);
         } 
@@ -147,6 +162,15 @@ fn int main() @winmain {
     int x_offset = 0;
     int y_offset = 0;
 
+    // minimal fixed-step timing
+    long perf_freq = 0;
+    long last_counter = 0;
+    double accumulator = 0.0;
+    double fixed_dt = 1.0 / 60.0;
+
+    win32::query_performance_frequency(&perf_freq);
+    win32::query_performance_counter(&last_counter);
+
     while (running) {
         Msg message;
         while (win32::peek_message(&message, null, 0, 0, PeekMessageRemoveType.PM_REMOVE)) {
@@ -157,16 +181,43 @@ fn int main() @winmain {
             win32::dispatch_message(&message);
         }
 
-        render_weird_gradient(x_offset++, y_offset);
+		if (bitmap_memory) {
+            long now = 0;
+            win32::query_performance_counter(&now);
+            double delta_seconds = (double)(now - last_counter) / (double)perf_freq;
+            last_counter = now;
 
-        Hdc device_context = win32::get_dc(window);
-        Rect client_rect;
-        win32::get_client_rect(window, &client_rect);
+            accumulator += delta_seconds;
+            if (accumulator > 0.25) accumulator = 0.25;
+
+            while (accumulator >= fixed_dt) {
+                x_offset += 1;
+                accumulator -= fixed_dt;
+            }
+
+            render_weird_gradient(x_offset, y_offset);
+        }
+
+        Hdc window_device = win32::get_dc(window);
+        Rect client_rect; win32::get_client_rect(window, &client_rect);
         int window_width = client_rect.right - client_rect.left;
         int window_height = client_rect.bottom - client_rect.top;
-        update_window(device_context, &client_rect, 0, 0, window_width, window_height);
-        win32::release_dc(window, device_context);
+
+        update_window(window_device, &client_rect, 0, 0, window_width, window_height);
+        win32::release_dc(window, window_device);
+        win32::sleep(1);
     }
+
+    if (device) {
+        win32::select_object(device, prev_hbitmap);
+        win32::delete_dc(device);
+        device = null;
+    }
+    if (hbitmap) {
+        win32::delete_object(hbitmap);
+        hbitmap = null;
+    }
+    bitmap_memory = null;
 
     return 0;
 }
