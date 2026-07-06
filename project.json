@@ -4,7 +4,8 @@
     "output": "build/",
     "targets": {
         "c3madehero": {
-            "type": "executable"
+            "type": "executable",
+            "target": "windows-x64"
         }
     },
     "debug-info": "full"
