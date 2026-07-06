@@ -2,7 +2,7 @@
 
 target:
 {
-  executable: "build/c3madehero.exe"
-  working_directory: "data/"
+  executable: "build/debug/c3madehero.exe"
+  working_directory: "build/debug/"
   enabled: 1
 }

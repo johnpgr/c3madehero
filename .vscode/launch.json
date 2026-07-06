@@ -4,10 +4,19 @@
 		{
 			"type": "lldb",
 			"request": "launch",
-			"name": "Debug C3 Program",
-			"program": "${workspaceFolder}/build/c3madehero.exe",
+			"name": "Debug C3 Program (debug build)",
+			"program": "${workspaceFolder}/build/debug/c3madehero.exe",
 			"args": [],
-			"cwd": "${workspaceFolder}",
+			"cwd": "${workspaceFolder}/build/debug",
+			"stopOnEntry": false
+		},
+		{
+			"type": "lldb",
+			"request": "launch",
+			"name": "Run C3 Program (release build)",
+			"program": "${workspaceFolder}/build/release/c3madehero.exe",
+			"args": [],
+			"cwd": "${workspaceFolder}/build/release",
 			"stopOnEntry": false
 		}
 	]

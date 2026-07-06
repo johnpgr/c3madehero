@@ -1473,6 +1473,12 @@ extern fn LResult dispatch_messageW(Msg* lpMsg)
 extern fn Bool get_client_rect(HWnd hWnd, Rect* lpRect)
     @cname("GetClientRect") @link("user32");
 
+extern fn iptr get_window_long_ptrA(HWnd hWnd, WindowLongPtrIndex nIndex)
+    @cname("GetWindowLongPtrA") @link("user32");
+
+extern fn iptr get_window_long_ptrW(HWnd hWnd, WindowLongPtrIndex nIndex)
+    @cname("GetWindowLongPtrW") @link("user32");
+
 <*
  @param [&out] lpMsg
 *>
@@ -1548,6 +1554,12 @@ extern fn ushort register_classW(WndClassW* lpWndClass)
 extern fn uptr set_timer(HWnd hWnd, uptr nIDEvent, uint uElapse, TimerProc lpTimerFunc)
     @cname("SetTimer") @link("user32");
 
+extern fn iptr set_window_long_ptrA(HWnd hWnd, WindowLongPtrIndex nIndex, iptr dwNewLong)
+    @cname("SetWindowLongPtrA") @link("user32");
+
+extern fn iptr set_window_long_ptrW(HWnd hWnd, WindowLongPtrIndex nIndex, iptr dwNewLong)
+    @cname("SetWindowLongPtrW") @link("user32");
+
 extern fn Bool set_window_textA(HWnd hWnd, char* lpString)
     @cname("SetWindowTextA") @link("user32");
 
@@ -1591,6 +1603,18 @@ macro LResult def_window_proc(HWnd hWnd, uint msg, WParam wParam, LParam lParam)
 @if($feature(WIN32_UNICODE))
 {
     return def_window_procW(hWnd, msg, wParam, lParam);
+}
+
+macro iptr get_window_long_ptr(HWnd hWnd, WindowLongPtrIndex nIndex)
+@if(!$feature(WIN32_UNICODE))
+{
+    return get_window_long_ptrA(hWnd, nIndex);
+}
+
+macro iptr get_window_long_ptr(HWnd hWnd, WindowLongPtrIndex nIndex)
+@if($feature(WIN32_UNICODE))
+{
+    return get_window_long_ptrW(hWnd, nIndex);
 }
 
 <*
@@ -1719,6 +1743,18 @@ macro ushort register_class_ex(WndClassExW* param0)
     return register_class_exW(param0);
 }
 
+macro iptr set_window_long_ptr(HWnd hWnd, WindowLongPtrIndex nIndex, iptr dwNewLong)
+@if(!$feature(WIN32_UNICODE))
+{
+    return set_window_long_ptrA(hWnd, nIndex, dwNewLong);
+}
+
+macro iptr set_window_long_ptr(HWnd hWnd, WindowLongPtrIndex nIndex, iptr dwNewLong)
+@if($feature(WIN32_UNICODE))
+{
+    return set_window_long_ptrW(hWnd, nIndex, dwNewLong);
+}
+
 macro Bool set_window_text(HWnd hWnd, char* lpString)
 @if(!$feature(WIN32_UNICODE))
 {
@@ -1730,4 +1766,3 @@ macro Bool set_window_text(HWnd hWnd, ushort* lpString)
 {
     return set_window_textW(hWnd, lpString);
 }
-

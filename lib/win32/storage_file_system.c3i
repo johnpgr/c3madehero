@@ -4,6 +4,24 @@ module win32;
 
 // Win32 namespace: Windows.Win32.Storage.FileSystem
 
+const int MAX_PATH = 260;
+const Handle INVALID_HANDLE_VALUE = (Handle)(uptr)-1;
+
+// Win32 original: WIN32_FIND_DATAA
+struct Win32FindDataA
+{
+    uint dwFileAttributes;
+    FileTime ftCreationTime;
+    FileTime ftLastAccessTime;
+    FileTime ftLastWriteTime;
+    uint nFileSizeHigh;
+    uint nFileSizeLow;
+    uint dwReserved0;
+    uint dwReserved1;
+    char[MAX_PATH] cFileName;
+    char[14] cAlternateFileName;
+}
+
 // Win32 original: VS_FIXEDFILEINFO
 struct VsFixedfileinfo
 {
@@ -52,5 +70,29 @@ constdef VsFixedfileinfoFileOs : uint
     VOS_OS216_PM16 = 131074,
     VOS_OS232_PM32 = 196611,
     VOS_NT_WINDOWS32 = 262148
+}
+
+extern fn int compare_file_time(FileTime* lpFileTime1, FileTime* lpFileTime2)
+    @cname("CompareFileTime") @link("kernel32");
+
+extern fn Bool copy_fileA(char* lpExistingFileName, char* lpNewFileName, Bool bFailIfExists)
+    @cname("CopyFileA") @link("kernel32");
+
+extern fn Handle find_first_fileA(char* lpFileName, Win32FindDataA* lpFindFileData)
+    @cname("FindFirstFileA") @link("kernel32");
+
+extern fn Bool find_close(Handle hFindFile)
+    @cname("FindClose") @link("kernel32");
+
+macro Bool copy_file(char* lpExistingFileName, char* lpNewFileName, Bool bFailIfExists)
+@if(!$feature(WIN32_UNICODE))
+{
+    return copy_fileA(lpExistingFileName, lpNewFileName, bFailIfExists);
+}
+
+macro Handle find_first_file(char* lpFileName, Win32FindDataA* lpFindFileData)
+@if(!$feature(WIN32_UNICODE))
+{
+    return find_first_fileA(lpFileName, lpFindFileData);
 }
 

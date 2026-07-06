@@ -1,12 +1,46 @@
 {
     "version": "0.1.0",
-    "sources": ["src/", "lib/"],
+    "sources": ["lib/", "shared/"],
     "output": "build/",
+    "debug-info": "full",
     "targets": {
-        "c3madehero": {
+        "c3madehero-debug": {
             "type": "executable",
-            "target": "windows-x64"
+            "target": "windows-x64",
+            "sources": ["platform/"],
+            "name": "c3madehero",
+            "output": "build/debug/"
+        },
+        "c3madehero_game-debug": {
+            "type": "dynamic-lib",
+            "target": "windows-x64",
+            "sources": ["game/"],
+            "name": "c3madehero_game",
+            "output": "build/debug/"
+        },
+        "c3madehero-release": {
+            "type": "executable",
+            "target": "windows-x64",
+            "sources": ["platform/"],
+            "name": "c3madehero",
+            "output": "build/release/",
+            "debug-info": "none",
+            "safe": false,
+            "panic-msg": false,
+            "show-backtrace": false,
+            "optsize": "small"
+        },
+        "c3madehero_game-release": {
+            "type": "dynamic-lib",
+            "target": "windows-x64",
+            "sources": ["game/"],
+            "name": "c3madehero_game",
+            "output": "build/release/",
+            "debug-info": "none",
+            "safe": false,
+            "panic-msg": false,
+            "show-backtrace": false,
+            "optsize": "small"
         }
-    },
-    "debug-info": "full"
+    }
 }

@@ -2,13 +2,100 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "C3 run project",
+      "label": "C3 build debug",
       "type": "shell",
-      "command": "c3c build && ./build/c3madehero.exe",
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      },
+      "command": "c3c build c3madehero-debug && c3c build c3madehero_game-debug",
+      "group": "build",
+      "problemMatcher": {
+        "owner": "c3",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^\\((.+):(\\d+):(\\d+)\\)\\s+(Error|Warning):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        }
+      }
+    },
+    {
+      "label": "C3 build release",
+      "type": "shell",
+      "command": "c3c build c3madehero-release && c3c build c3madehero_game-release",
+      "group": "build",
+      "problemMatcher": {
+        "owner": "c3",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^\\((.+):(\\d+):(\\d+)\\)\\s+(Error|Warning):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        }
+      }
+    },
+    {
+      "label": "C3 build platform (debug)",
+      "type": "shell",
+      "command": "c3c build c3madehero-debug",
+      "group": "build",
+      "problemMatcher": {
+        "owner": "c3",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^\\((.+):(\\d+):(\\d+)\\)\\s+(Error|Warning):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        }
+      }
+    },
+    {
+      "label": "C3 build game (debug)",
+      "type": "shell",
+      "command": "c3c build c3madehero_game-debug",
+      "group": "build",
+      "problemMatcher": {
+        "owner": "c3",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^\\((.+):(\\d+):(\\d+)\\)\\s+(Error|Warning):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        }
+      }
+    },
+    {
+      "label": "C3 run debug",
+      "type": "shell",
+      "command": "c3c build c3madehero-debug && c3c build c3madehero_game-debug && (cd build/debug && ./c3madehero.exe)",
+      "group": {"kind": "build", "isDefault": true},
+      "problemMatcher": {
+        "owner": "c3",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^\\((.+):(\\d+):(\\d+)\\)\\s+(Error|Warning):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        }
+      }
+    },
+    {
+      "label": "C3 run release",
+      "type": "shell",
+      "command": "c3c build c3madehero-release && c3c build c3madehero_game-release && (cd build/release && ./c3madehero.exe)",
+      "group": "build",
       "problemMatcher": {
         "owner": "c3",
         "fileLocation": "absolute",
