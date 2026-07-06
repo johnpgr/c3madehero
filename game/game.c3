@@ -1,5 +1,6 @@
 module game;
 
+import win32;
 import game_api;
 import std::core::mem;
 import std::core::mem::alloc;
@@ -10,6 +11,12 @@ const ushort BMP_BITS_PER_PIXEL = 32;
 const ushort BMP_REQUIRED_PLANES = 1;
 const uint BMP_INFO_HEADER_SIZE = 40;
 const uint BMP_INFO_HEADER_SIZE_V3 = 56;
+
+faultdef BMP_MEMORY_UNAVAILABLE;
+faultdef BMP_FILE_READ_FAILED;
+faultdef BMP_FILE_TOO_SMALL;
+faultdef BMP_UNSUPPORTED_FORMAT;
+faultdef BMP_PIXEL_DATA_OUT_OF_BOUNDS;
 
 struct BitmapHeader @packed {
 	ushort file_type;
@@ -66,47 +73,71 @@ struct GameState {
 
 const double FIXED_DT = 1.0 / 60.0;
 
-fn LoadedBitmap debug_load_bmp(GameMemory* memory, String filename) {
+fn void debug_crash_with_bmp_error(char* error_name, String asset_name) {
+	(void)win32::message_box(
+		null,
+		error_name,
+		asset_name.ptr,
+		win32::MessageboxStyle.MB_OK | win32::MessageboxStyle.MB_ICONERROR
+	);
+	win32::exit_process(1);
+}
+
+fn LoadedBitmap? debug_load_bmp(GameMemory* memory, String filename) {
 	LoadedBitmap result;
 	if (!memory || !memory.debug_read_file) {
-		return result;
+		debug_crash_with_bmp_error("BMP_MEMORY_UNAVAILABLE", filename);
+		return BMP_MEMORY_UNAVAILABLE~;
 	}
 
 	char[]? loaded_file = memory.debug_read_file(memory.permanent, filename);
 	if (catch loaded_file) {
-		return result;
+		debug_crash_with_bmp_error("BMP_FILE_READ_FAILED", filename);
+		return BMP_FILE_READ_FAILED~;
 	}
 
-	char[] file = loaded_file;
-	if (file.len < BitmapHeader::size) {
-		return result;
+	if (loaded_file.len < BitmapHeader::size) {
+		debug_crash_with_bmp_error("BMP_FILE_TOO_SMALL", filename);
+		return BMP_FILE_TOO_SMALL~;
 	}
 
-	BitmapHeader* header = (BitmapHeader*)file.ptr;
-	if (header.file_type != BMP_FILE_TYPE ||
-		(header.size != BMP_INFO_HEADER_SIZE && header.size != BMP_INFO_HEADER_SIZE_V3) ||
-		header.planes != BMP_REQUIRED_PLANES ||
-		header.bits_per_pixel != BMP_BITS_PER_PIXEL ||
-		header.width <= 0 ||
-		header.height <= 0) {
-		return result;
+	BitmapHeader* header = (BitmapHeader*)loaded_file.ptr;
+	if (header.file_type != BMP_FILE_TYPE
+		|| (header.size != BMP_INFO_HEADER_SIZE && header.size != BMP_INFO_HEADER_SIZE_V3)
+	    ||  header.planes != BMP_REQUIRED_PLANES
+	    ||  header.bits_per_pixel != BMP_BITS_PER_PIXEL
+	    ||  header.width <= 0
+	    ||  header.height <= 0
+	) {
+		debug_crash_with_bmp_error("BMP_UNSUPPORTED_FORMAT", filename);
+		return BMP_UNSUPPORTED_FORMAT~;
 	}
 
 	ulong pixel_count = (ulong)header.width * (ulong)header.height;
 	ulong pixel_bytes = pixel_count * uint::size;
 	ulong bitmap_offset = (ulong)header.bitmap_offset;
-	ulong file_size = (ulong)file.len;
+	ulong file_size = (ulong)loaded_file.len;
 	if (bitmap_offset < BitmapHeader::size || bitmap_offset > file_size || pixel_bytes > file_size - bitmap_offset) {
-		return result;
+		debug_crash_with_bmp_error("BMP_PIXEL_DATA_OUT_OF_BOUNDS", filename);
+		return BMP_PIXEL_DATA_OUT_OF_BOUNDS~;
 	}
 
 	// Accepts both the plain 40-byte header and Aseprite/Photoshop's 56-byte
 	// BITMAPV3INFOHEADER (adds explicit BGRA channel masks); pixels are copied
 	// directly either way since both use the same B,G,R,A byte order.
-	result.pixels = file.ptr + header.bitmap_offset;
+	result.pixels = loaded_file.ptr + header.bitmap_offset;
 	result.width = header.width;
 	result.height = header.height;
 	return result;
+}
+
+fn LoadedBitmap debug_load_bmp_or_crash(GameMemory* memory, String filename) {
+	LoadedBitmap? bitmap = debug_load_bmp(memory, filename);
+	if (catch err = bitmap) {
+		debug_crash_with_bmp_error(err.description, filename);
+		return {};
+	}
+	return bitmap;
 }
 
 <*
@@ -283,12 +314,12 @@ fn void game_update_and_render(GameMemory* memory, GameOffscreenBuffer* buffer, 
 		state.x_offset = 0;
 		state.y_offset = 0;
 		state.accumulator = 0;
-		state.test = debug_load_bmp(memory, "data/test.bmp");
+		state.test = debug_load_bmp_or_crash(memory, "test.bmp");
 		state.world.tile_map.tile_count_x = TILE_COUNT_X;
 		state.world.tile_map.tile_count_y = TILE_COUNT_Y;
 		state.world.tile_map.tile_side_in_pixels = TILE_SIDE_IN_PIXELS;
-		state.world.spritesheet = debug_load_bmp(memory, "data/tile.bmp");
-		state.world.wall_bitmap = debug_load_bmp(memory, "data/wall.bmp");
+		state.world.spritesheet = debug_load_bmp_or_crash(memory, "tile.bmp");
+		state.world.wall_bitmap = debug_load_bmp_or_crash(memory, "wall.bmp");
 
 		state.world.spritesheet_columns = state.world.spritesheet.width / TILE_SIDE_IN_PIXELS;
 		if (state.world.spritesheet_columns < 1) {

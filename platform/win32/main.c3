@@ -14,8 +14,11 @@ const uptr TRANSIENT_MEMORY_SIZE = 64 * mem::MB;
 const int BYTES_PER_PIXEL = 4;
 const double MAX_DT = 0.25;
 
-const int WINDOW_WIDTH = 320;
-const int WINDOW_HEIGHT = 180;
+const int RENDER_WIDTH = 320;
+const int RENDER_HEIGHT = 180;
+
+const int WINDOW_WIDTH = 960;
+const int WINDOW_HEIGHT = 540;
 
 const WindowStyle FIXED_WINDOW_STYLE =
 	WindowStyle.WS_OVERLAPPED |
@@ -36,9 +39,10 @@ const ushort BMP_BITS_PER_PIXEL = 32;
 const ushort BMP_REQUIRED_PLANES = 1;
 const uint BMP_INFO_HEADER_SIZE = 40;
 const uint BMP_COMPRESSION_RGB = 0;
+const uint WIN32_MAX_PATH = 260;
 
-const char* GAME_DLL_PATH = "c3madehero_game.dll";
-const char* GAME_DLL_TEMP_PATH = "c3madehero_game_temp.dll";
+char[WIN32_MAX_PATH] game_dll_path;
+char[WIN32_MAX_PATH] game_dll_temp_path;
 
 faultdef FILE_WRITE_TIME_UNAVAILABLE;
 faultdef GAME_DLL_COPY_FAILED;
@@ -52,6 +56,7 @@ faultdef MEMORY_RESERVE_FAILED;
 faultdef WINDOW_CLASS_REGISTER_FAILED;
 faultdef WINDOW_CREATE_FAILED;
 faultdef INVALID_SCREENSHOT_BUFFER;
+faultdef GAME_DLL_PATH_CREATE_FAILED;
 
 struct BmpWriteHeader @packed {
 	ushort file_type;
@@ -104,6 +109,53 @@ struct App {
 
 fn void App.stop(&self) {
 	self.running = false;
+}
+
+fn void? init_game_dll_paths() {
+	// Both DLLs live next to the running executable, so resolve the exe's
+	// directory once and stamp each filename onto it.
+	char[WIN32_MAX_PATH] exe_path;
+	uint len = win32::get_module_file_name(null, &exe_path, (uint)exe_path.len);
+	if (len == 0 || len >= exe_path.len) {
+		return GAME_DLL_PATH_CREATE_FAILED~;
+	}
+
+	usz dir_len = len;
+	while (dir_len > 0) {
+		dir_len -= 1;
+		if (exe_path[dir_len] == '\\' || exe_path[dir_len] == '/') {
+			dir_len += 1;
+			break;
+		}
+	}
+
+	if (!build_exe_relative_path(game_dll_path[..], exe_path[:dir_len], "c3madehero_game.dll") ||
+		!build_exe_relative_path(game_dll_temp_path[..], exe_path[:dir_len], "c3madehero_game_temp.dll")) {
+		return GAME_DLL_PATH_CREATE_FAILED~;
+	}
+}
+
+fn bool build_exe_relative_path(char[] buffer, char[] dir, char* filename) {
+	usz at = 0;
+	while (at < dir.len) {
+		if (at + 1 >= buffer.len) {
+			return false;
+		}
+		buffer[at] = dir[at];
+		at += 1;
+	}
+
+	usz read_at = 0;
+	while (filename[read_at]) {
+		if (at + 1 >= buffer.len) {
+			return false;
+		}
+		buffer[at] = filename[read_at];
+		at += 1;
+		read_at += 1;
+	}
+	buffer[at] = 0;
+	return true;
 }
 
 fn char[]? debug_read_entire_file(Vmem* allocator, String filename) {
@@ -289,12 +341,13 @@ fn double FrameTiming.consume_dt(&self) {
 }
 
 fn void? write_bmp_file(String path, GameOffscreenBuffer* buffer) {
-	if (!buffer ||
-		!buffer.memory ||
-		buffer.width <= 0 ||
-		buffer.height <= 0 ||
-		buffer.bytes_per_pixel != BYTES_PER_PIXEL ||
-		buffer.pitch < buffer.width * BYTES_PER_PIXEL) {
+	if (!buffer
+	 || !buffer.memory
+	 ||  buffer.width <= 0
+	 ||  buffer.height <= 0
+	 ||  buffer.bytes_per_pixel != BYTES_PER_PIXEL
+	 ||  buffer.pitch < buffer.width * BYTES_PER_PIXEL
+	) {
 		return INVALID_SCREENSHOT_BUFFER~;
 	}
 
@@ -303,8 +356,6 @@ fn void? write_bmp_file(String path, GameOffscreenBuffer* buffer) {
 	BmpWriteHeader header = {
 		.file_type = BMP_FILE_TYPE,
 		.file_size = (uint)BmpWriteHeader::size + image_size,
-		.reserved1 = 0,
-		.reserved2 = 0,
 		.bitmap_offset = (uint)BmpWriteHeader::size,
 		.info_header_size = BMP_INFO_HEADER_SIZE,
 		.width = buffer.width,
@@ -313,10 +364,6 @@ fn void? write_bmp_file(String path, GameOffscreenBuffer* buffer) {
 		.bits_per_pixel = BMP_BITS_PER_PIXEL,
 		.compression = BMP_COMPRESSION_RGB,
 		.image_size = image_size,
-		.x_pixels_per_meter = 0,
-		.y_pixels_per_meter = 0,
-		.colors_used = 0,
-		.important_colors = 0,
 	};
 
 	File output_file = file::open(path, "wb")!;
@@ -338,21 +385,53 @@ fn void App.present(&self, Canvas2D* canvas, int window_width, int window_height
 		return;
 	}
 
+	int buf_w = canvas.buffer.width;
+	int buf_h = canvas.buffer.height;
+
+	double scale_w = (double)window_width / (double)buf_w;
+	double scale_h = (double)window_height / (double)buf_h;
+	double scale = scale_w < scale_h ? scale_w : scale_h;
+	int dst_w = (int)(buf_w * scale);
+	int dst_h = (int)(buf_h * scale);
+	int off_x = (window_width - dst_w) / 2;
+	int off_y = (window_height - dst_h) / 2;
+
 	Hdc window_device = win32::get_dc(self.window);
 	if (window_device) {
-		if (window_width == canvas.buffer.width && window_height == canvas.buffer.height) {
+		int top_h = off_y;
+		if (window_width > 0 && top_h > 0) {
+			win32::pat_blt(window_device, 0, 0, window_width, top_h, RopCode.BLACKNESS);
+		}
+
+		int bottom_y = off_y + dst_h;
+		int bottom_h = window_height - bottom_y;
+		if (window_width > 0 && bottom_h > 0) {
+			win32::pat_blt(window_device, 0, bottom_y, window_width, bottom_h, RopCode.BLACKNESS);
+		}
+
+		if (off_x > 0 && dst_h > 0) {
+			win32::pat_blt(window_device, 0, off_y, off_x, dst_h, RopCode.BLACKNESS);
+		}
+
+		int right_x = off_x + dst_w;
+		int right_w = window_width - right_x;
+		if (right_w > 0 && dst_h > 0) {
+			win32::pat_blt(window_device, right_x, off_y, right_w, dst_h, RopCode.BLACKNESS);
+		}
+
+		if (dst_w == buf_w && dst_h == buf_h) {
 			win32::bit_blt(
 				window_device,
-				0, 0, window_width, window_height,
+				off_x, off_y, dst_w, dst_h,
 				canvas.device, 0, 0,
 				RopCode.SRCCOPY,
 			);
 		} else {
 			win32::stretch_blt(
 				window_device,
-				0, 0, window_width, window_height,
+				off_x, off_y, dst_w, dst_h,
 				canvas.device,
-				0, 0, canvas.buffer.width, canvas.buffer.height,
+				0, 0, buf_w, buf_h,
 				RopCode.SRCCOPY,
 			);
 		}
@@ -363,7 +442,7 @@ fn void App.present(&self, Canvas2D* canvas, int window_width, int window_height
 fn void App.process_frame(&self) {
 	self.transient_allocator.reset(0);
 
-	if (catch self.game_code.reload_if_changed(GAME_DLL_PATH, GAME_DLL_TEMP_PATH)) {
+	if (catch self.game_code.reload_if_changed(game_dll_path[..].ptr, game_dll_temp_path[..].ptr)) {
 		win32::output_debug_string("Failed to reload game DLL\n");
 		self.stop();
 		return;
@@ -378,12 +457,6 @@ fn void App.process_frame(&self) {
 
 	int window_width = client_rect.right - client_rect.left;
 	int window_height = client_rect.bottom - client_rect.top;
-
-	if (catch self.canvas.resize(window_width, window_height)) {
-		win32::output_debug_string("Failed to resize canvas\n");
-		self.stop();
-		return;
-	}
 
 	double dt = self.timing.consume_dt();
 
@@ -436,8 +509,9 @@ fn void? App.init_memory(&self) {
 fn void? App.init(&self, HInstance h_instance, int window_width, int window_height, WindowStyle style) {
 	self.init_memory()!;
 	self.create_window(h_instance, window_width, window_height, style)!;
+	self.canvas.resize(RENDER_WIDTH, RENDER_HEIGHT)!;
 
-	if (catch self.game_code.load(GAME_DLL_PATH, GAME_DLL_TEMP_PATH)) {
+	if (catch self.game_code.load(game_dll_path[..].ptr, game_dll_temp_path[..].ptr)) {
 		win32::output_debug_string("Failed to load initial game DLL\n");
 		return GAME_DLL_LOAD_FAILED~;
 	}
@@ -460,7 +534,7 @@ fn void? App.create_window(&self, HInstance h_instance, int width, int height, W
 	self.window = win32::create_window_ex(
 		(WindowExStyle)0,
 		window_class.lpszClassName,
-		"C3Made Hero",
+		"C3MadeHero",
 		window_style,
 		win32::CW_USEDEFAULT, win32::CW_USEDEFAULT,
 		width, height,
@@ -505,7 +579,7 @@ fn int App.run_headless_screenshot(&self, String output_path) {
 		return -1;
 	}
 
-	if (catch self.game_code.load(GAME_DLL_PATH, GAME_DLL_TEMP_PATH)) {
+	if (catch self.game_code.load(game_dll_path[..].ptr, game_dll_temp_path[..].ptr)) {
 		win32::output_debug_string("Failed to load initial game DLL\n");
 		return -1;
 	}
@@ -545,7 +619,7 @@ fn LResult main_window_proc(HWnd window, uint message, WParam w_param, LParam l_
 
 			app.window = window;
 			win32::set_window_long_ptr(window, WindowLongPtrIndex.GWLP_USERDATA, (iptr)app);
-			result = 1;
+			result = win32::def_window_proc(window, message, w_param, l_param);
 		} break;
 		case win32::WM_CLOSE: case win32::WM_DESTROY: {
 			App* app = (App*)win32::get_window_long_ptr(window, WindowLongPtrIndex.GWLP_USERDATA);
@@ -566,6 +640,11 @@ fn LResult main_window_proc(HWnd window, uint message, WParam w_param, LParam l_
 }
 
 fn int main(String[] args) @winmain {
+	if (catch init_game_dll_paths()) {
+		win32::output_debug_string("Failed to initialize game DLL paths\n");
+		return -1;
+	}
+
 	String screenshot_path;
 	bool should_take_screenshot = false;
 	for (usz i = 0; i < args.len; i++) {
@@ -588,7 +667,7 @@ fn int main(String[] args) @winmain {
 	};
 
 	App app;
-	if (catch app.init(h_instance, WINDOW_WIDTH, WINDOW_HEIGHT, FIXED_WINDOW_STYLE)) {
+	if (catch app.init(h_instance, WINDOW_WIDTH, WINDOW_HEIGHT, RESIZABLE_WINDOW_STYLE)) {
 		app.shutdown();
 		return -1;
 	}
