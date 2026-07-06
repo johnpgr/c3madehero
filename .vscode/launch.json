@@ -7,7 +7,7 @@
 			"name": "Debug C3 Program (debug build)",
 			"program": "${workspaceFolder}/build/debug/c3madehero.exe",
 			"args": [],
-			"cwd": "${workspaceFolder}/build/debug",
+			"cwd": "${workspaceFolder}/data",
 			"stopOnEntry": false
 		},
 		{
@@ -16,7 +16,7 @@
 			"name": "Run C3 Program (release build)",
 			"program": "${workspaceFolder}/build/release/c3madehero.exe",
 			"args": [],
-			"cwd": "${workspaceFolder}/build/release",
+			"cwd": "${workspaceFolder}/data",
 			"stopOnEntry": false
 		}
 	]

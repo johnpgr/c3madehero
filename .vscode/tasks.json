@@ -76,8 +76,8 @@
     {
       "label": "C3 run debug",
       "type": "shell",
-      "command": "c3c build c3madehero-debug && c3c build c3madehero_game-debug && (cd build/debug && ./c3madehero.exe)",
-      "group": {"kind": "build", "isDefault": true},
+      "command": "c3c build c3madehero-debug && c3c build c3madehero_game-debug && (cd data && ../build/debug/c3madehero.exe)",
+      "group": {"kind": "build", "isDefault": true },
       "problemMatcher": {
         "owner": "c3",
         "fileLocation": "absolute",
@@ -94,7 +94,7 @@
     {
       "label": "C3 run release",
       "type": "shell",
-      "command": "c3c build c3madehero-release && c3c build c3madehero_game-release && (cd build/release && ./c3madehero.exe)",
+      "command": "c3c build c3madehero-release && c3c build c3madehero_game-release && (cd data && ../build/release/c3madehero.exe)",
       "group": "build",
       "problemMatcher": {
         "owner": "c3",
